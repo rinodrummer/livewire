@@ -234,6 +234,69 @@ class BrowserTest extends \Tests\BrowserTestCase
     }
     
     /** @test */
+    public function can_bind_a_property_from_parent_form_with_nested_array_to_property_from_child()
+    {
+        $test = Livewire::visit([
+            new class extends \Livewire\Component {
+                public CreatePostUsingNestedArray $form;
+                
+                public function submit()
+                {
+                    $this->form->store();
+                }
+                
+                public function render()
+                {
+                    return <<<'HTML'
+                <div>
+                    <span dusk='parent'>Parent: {{ $form->entries['bar'][0]['baz'] }}</span>
+                    <span x-text="$wire.form.entries['bar'][0]['baz']" dusk='parent.ephemeral'></span>
+
+                    <livewire:child wire:model='form.entries' />
+
+                    <button wire:click='$refresh' dusk='refresh'>refresh</button>
+                    <button wire:click='submit' dusk='submit'>submit</button>
+                </div>
+                HTML;
+                }
+            },
+            'child' => new class extends \Livewire\Component {
+                #[BaseModelable]
+                public $entry;
+                
+                public function render()
+                {
+                    return <<<'HTML'
+                        <div>
+                            <span dusk='child'>Child: {{ $entry['bar'][0]['baz'] }}</span>
+                            <span x-text="$wire.entry['bar'][0]['baz']" dusk='child.ephemeral'></span>
+                            <input type='text' wire:model='entry.bar.0.baz' dusk='child.input' />
+                        </div>
+                    HTML;
+                }
+            },
+        ])
+            ->assertDontSee('Property [$form.entries.bar.0.baz] not found')
+            ->assertSeeIn('@parent', 'Parent:')
+            ->assertSeeIn('@child', 'Child:')
+            ->assertSeeNothingIn('@parent.ephemeral')
+            ->assertSeeNothingIn('@child.ephemeral')
+            ->type('@child.input', 'foo')
+            ->assertSeeIn('@parent', 'Parent:')
+            ->assertSeeIn('@child', 'Child:')
+            ->assertSeeIn('@parent.ephemeral', 'foo')
+            ->assertSeeIn('@child.ephemeral', 'foo')
+            ->waitForLivewire()->click('@refresh')
+            ->assertSeeIn('@parent', 'Parent: foo')
+            ->assertSeeIn('@child', 'Child: foo')
+            ->assertSeeIn('@parent.ephemeral', 'foo')
+            ->assertSeeIn('@child.ephemeral', 'foo')
+            ->waitForLivewire()->click('@submit')
+            ->assertSeeNothingIn('@parent.ephemeral', '')
+            ->assertSeeNothingIn('@child.ephemeral', '');
+    }
+    
+    /** @test */
     public function can_bind_a_property_from_parent_to_property_from_child_ignoring_modifiers()
     {
         Livewire::visit([
@@ -454,6 +517,69 @@ class BrowserTest extends \Tests\BrowserTestCase
             ->assertSeeNothingIn('@parent.ephemeral', '')
             ->assertSeeNothingIn('@child.ephemeral', '');
     }
+    
+    /** @test */
+    public function can_bind_a_property_from_parent_form_with_nested_array_to_property_from_child_ignoring_modifiers()
+    {
+        $test = Livewire::visit([
+            new class extends \Livewire\Component {
+                public CreatePostUsingNestedArray $form;
+                
+                public function submit()
+                {
+                    $this->form->store();
+                }
+                
+                public function render()
+                {
+                    return <<<'HTML'
+                <div>
+                    <span dusk='parent'>Parent: {{ $form->entries['bar'][0]['baz'] }}</span>
+                    <span x-text="$wire.form.entries['bar'][0]['baz']" dusk='parent.ephemeral'></span>
+
+                    <livewire:child wire:model.throttle='form.entries' />
+
+                    <button wire:click='$refresh' dusk='refresh'>refresh</button>
+                    <button wire:click='submit' dusk='submit'>submit</button>
+                </div>
+                HTML;
+                }
+            },
+            'child' => new class extends \Livewire\Component {
+                #[BaseModelable]
+                public $entry;
+                
+                public function render()
+                {
+                    return <<<'HTML'
+                        <div>
+                            <span dusk='child'>Child: {{ $entry['bar'][0]['baz'] }}</span>
+                            <span x-text="$wire.entry['bar'][0]['baz']" dusk='child.ephemeral'></span>
+                            <input type='text' wire:model='entry.bar.0.baz' dusk='child.input' />
+                        </div>
+                    HTML;
+                }
+            },
+        ])
+            ->assertDontSee('Property [$form.entries.bar.0.baz] not found')
+            ->assertSeeIn('@parent', 'Parent:')
+            ->assertSeeIn('@child', 'Child:')
+            ->assertSeeNothingIn('@parent.ephemeral')
+            ->assertSeeNothingIn('@child.ephemeral')
+            ->type('@child.input', 'foo')
+            ->assertSeeIn('@parent', 'Parent:')
+            ->assertSeeIn('@child', 'Child:')
+            ->assertSeeIn('@parent.ephemeral', 'foo')
+            ->assertSeeIn('@child.ephemeral', 'foo')
+            ->waitForLivewire()->click('@refresh')
+            ->assertSeeIn('@parent', 'Parent: foo')
+            ->assertSeeIn('@child', 'Child: foo')
+            ->assertSeeIn('@parent.ephemeral', 'foo')
+            ->assertSeeIn('@child.ephemeral', 'foo')
+            ->waitForLivewire()->click('@submit')
+            ->assertSeeNothingIn('@parent.ephemeral', '')
+            ->assertSeeNothingIn('@child.ephemeral', '');
+    }
 }
 
 
@@ -467,6 +593,25 @@ class CreatePost extends Form
     {
         Post::create($this->all());
 
+        $this->reset();
+    }
+}
+
+class CreatePostUsingNestedArray extends Form
+{
+    #[Rule('required')]
+    public $entries = [
+        'bar' => [
+            [ 'baz' => null ]
+        ]
+    ];
+    
+    public function store()
+    {
+        Post::create([
+            'title' => $this->entries['bar'][0]['baz']
+        ]);
+        
         $this->reset();
     }
 }
